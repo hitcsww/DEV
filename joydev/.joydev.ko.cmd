@@ -1,0 +1,1 @@
+cmd_/home/liun/ruansan/joydev/joydev.ko := ld -r -m elf_i386 -T /usr/src/linux-headers-2.6.35-22-generic/scripts/module-common.lds --build-id -o /home/liun/ruansan/joydev/joydev.ko /home/liun/ruansan/joydev/joydev.o /home/liun/ruansan/joydev/joydev.mod.o
