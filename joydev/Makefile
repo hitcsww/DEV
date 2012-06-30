@@ -6,3 +6,4 @@ else
 default:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
 endif
+

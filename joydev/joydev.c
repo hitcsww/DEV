@@ -17,55 +17,40 @@
 #include <linux/sched.h>
 #include <linux/signal.h>
 
+
 MODULE_LICENSE("GPL");//加载到内核的形式
 
-#define JOYDEV_MINOR_BASE	0  //次设备号的基值
-#define JOYDEV_MINORS		16 //次设备号的范围
-#define JOYDEV_BUFFER_SIZE	64//缓冲区长度
-
+#define JOYDEV_MINOR_BASE	0  //次设备号的基�?#define JOYDEV_MINORS		16 //次设备号的范�?#define JOYDEV_BUFFER_SIZE	64//缓冲区长�?
 #define false			0
 #define true			1
 
 #define EDGE_MAX		32767    //摇杆最右边距离  
 #define EDGE_MIN	       -32768    //最左距离（两个字节表示的十进制数范围）
 
-struct joy_event{        //存放的鼠标事件
-	int dx, dy;     //移动相对距离
-	bool rel_event;   //是否是相对位移事件
-	unsigned long buttons;   //存放按键数据
+struct joy_event{        //存放的鼠标事�?	int dx, dy;     //移动相对距离
+	bool rel_event;   //是否是相对位移事�?	unsigned long buttons;   //存放按键数据
 };
 
-struct joydev {          //处理事件的对象
-	int exist;       //表示对象有误
+struct joydev {          //处理事件的对�?	int exist;       //表示对象有误
 	int open;        //表示设备节点打开次数
 	int minor;       //次设备号
-	struct input_handle handle;    //存放joy与js中input_dev匹配成功的信息
-	wait_queue_head_t wait;         //存放等待进程的链表
-	struct list_head client_list;    //joy_client的链表
-	spinlock_t client_lock;  //锁   保护链表，只允许一个进程读写
-	struct mutex mutex;      //信号量
-	struct device dev;         
+	struct input_handle handle;    //存放joy与js中input_dev匹配成功的信�?	wait_queue_head_t wait;         //存放等待进程的链�?	struct list_head client_list;    //joy_client的链�?	spinlock_t client_lock;  //�?  保护链表，只允许一个进程读�?	struct mutex mutex;      //信号�?	struct device dev;         
 
 	struct joy_event packet;  
 };
 
-struct joydev_client {    //事件缓冲区   （与joydev对应）
-	struct joy_event buffer[JOYDEV_BUFFER_SIZE];   //缓冲区
-	int head;//头
-	int tail;
+struct joydev_client {    //事件缓冲�?  （与joydev对应�?	struct joy_event buffer[JOYDEV_BUFFER_SIZE];   //缓冲�?	int head;//�?	int tail;
 
-	spinlock_t buffer_lock; //保护缓冲区的锁
-	struct fasync_struct *fasync;//异步通知应用程序读缓冲区的结构体
+	spinlock_t buffer_lock; //保护缓冲区的�?	struct fasync_struct *fasync;//异步通知应用程序读缓冲区的结构体
 	struct joydev *joydev;
 	struct list_head node;
 	int ready;
 };
 
-static struct joydev *joydev_table[JOYDEV_MINORS];  //声明一个数组     存次设备号对应的结构体
-static DEFINE_MUTEX(joydev_table_mutex);  //枷锁
+static struct joydev *joydev_table[JOYDEV_MINORS];  //声明一个数�?    存次设备号对应的结构�?static DEFINE_MUTEX(joydev_table_mutex);  //枷锁
 
 static void joydev_key_event(struct joydev *joydev,    //处理位移
-				unsigned int code, int value)   //code按键类型   value按键状态      
+				unsigned int code, int value)   //code按键类型   value按键状�?     
 {
 	int index;
 	switch (code) {
@@ -80,18 +65,15 @@ static void joydev_key_event(struct joydev *joydev,    //处理位移
 	default:		return;
 	}
 	if(value)	//按下置一
-                  set_bit(index,&joydev->packet.buttons);   //置1     第（index+1）位，置1      index由0开始
-	else		clear_bit(index,&joydev->packet.buttons);  //置0
+                  set_bit(index,&joydev->packet.buttons);   //�?     第（index+1）位，置1      index�?开�?	else		clear_bit(index,&joydev->packet.buttons);  //�?
 }
 
 static void joydev_rel_event(struct joydev *joydev,
-				unsigned int code, int value)  //处理位移    code位移类型  value位移数值
-{
+				unsigned int code, int value)  //处理位移    code位移类型  value位移数�?{
 	switch(code){
 		case REL_X:
 			joydev->packet.dx = value >= EDGE_MAX ?   //判断数据是否有效  >=32767有效     <=-32768   有效
-				2 : (value <= EDGE_MIN ? -2 : 0);  //  1表示移动距离（向右）  -1距离、向左   0  无动作
-			break;
+				2 : (value <= EDGE_MIN ? -2 : 0);  //  1表示移动距离（向右）  -1距离、向�?  0  无动�?			break;
 		case REL_Y:
 			joydev->packet.dy = value >= EDGE_MAX ?
 				2 : (value <= EDGE_MIN ? -2 : 0);
@@ -105,9 +87,7 @@ static void joydev_rel_event(struct joydev *joydev,
 }
 
 static int cmp(struct joy_event *p, struct joy_event *packet){   
-	if(packet->rel_event)	return true;   //判断是否是位移事件
-	if(p->buttons!=packet->buttons)	return true;   //不是位移事件   与前一次按键值（0、1、2、4、8）比较
-	return false;//表示一直按着
+	if(packet->rel_event)	return true;   //判断是否是位移事�?	if(p->buttons!=packet->buttons)	return true;   //不是位移事件   与前一次按键值（0�?�?�?�?）比�?	return false;//表示一直按着
 }
 
 static void joydev_notify_readers(struct joydev *joydev,
@@ -115,22 +95,17 @@ static void joydev_notify_readers(struct joydev *joydev,
 {
 	struct joydev_client *client;  
 	struct joy_event *p;
-	unsigned int new_head;//控制指针的位置
-	int wake_readers = 0;    //1  唤醒进程  
+	unsigned int new_head;//控制指针的位�?	int wake_readers = 0;    //1  唤醒进程  
 
-	rcu_read_lock();//？
-	list_for_each_entry_rcu(client, &joydev->client_list, node) {
+	rcu_read_lock();//�?	list_for_each_entry_rcu(client, &joydev->client_list, node) {
 
 		spin_lock(&client->buffer_lock);//锁缓冲区
 
-		p = &client->buffer[client->head];//取前一次事件
-		if (cmp(p,packet)) {
-			new_head = (client->head+1) % JOYDEV_BUFFER_SIZE;  //后移1位
-			if (new_head != client->tail) {   //不满
+		p = &client->buffer[client->head];//取前一次事�?		if (cmp(p,packet)) {
+			new_head = (client->head+1) % JOYDEV_BUFFER_SIZE;  //后移1�?			if (new_head != client->tail) {   //不满
 				p = &client->buffer[client->head = new_head];   //取移后的空位地址
 				memset(p, 0, sizeof(struct joy_event));  //初始
-				client->ready = 1;  //当前缓冲区是否可读
-			}	
+				client->ready = 1;  //当前缓冲区是否可�?			}	
 		}
 		p->dx = packet->dx;
 		p->dy = packet->dy;
@@ -139,13 +114,10 @@ static void joydev_notify_readers(struct joydev *joydev,
 		
 		if (client->ready && client->head!=client->tail) {
 			
-			kill_fasync(&client->fasync, SIGIO, POLL_IN); //发送SIGIO信号给应用程序
-			wake_readers = 1;
+			kill_fasync(&client->fasync, SIGIO, POLL_IN); //发送SIGIO信号给应用程�?			wake_readers = 1;
 		}
-		spin_unlock(&client->buffer_lock);  //开锁
-	}
-	rcu_read_unlock();//？
-	
+		spin_unlock(&client->buffer_lock);  //开�?	}
+	rcu_read_unlock();//�?	
 	if(wake_readers)	wake_up_interruptible(&joydev->wait); //唤醒读得进程
 }
 
@@ -176,8 +148,7 @@ static void joydev_event(struct input_handle *handle,
 }
 
 
-static int joydev_fasync(int fd, struct file *file, int on)   //？
-{
+static int joydev_fasync(int fd, struct file *file, int on)   //�?{
 	struct joydev_client *client = file->private_data;
 
 	return fasync_helper(fd, file, on, &client->fasync);
@@ -185,20 +156,16 @@ static int joydev_fasync(int fd, struct file *file, int on)   //？
 
 static void joydev_free(struct device *dev)//断开js与joydev在input_dev的链接，减少引用次数      
 {
-	struct joydev *joydev = container_of(dev, struct joydev, dev);//？
-
-	input_put_device(joydev->handle.dev);  ///？
-	kfree(joydev);  //减少引用次数
+	struct joydev *joydev = container_of(dev, struct joydev, dev);//�?
+	input_put_device(joydev->handle.dev);  ///�?	kfree(joydev);  //减少引用次数
 }
 
 static void joydev_attach_client(struct joydev *joydev,
-				 struct joydev_client *client)     //每打开一个设备节点就会生成一个client    attach将client加到链表里
-{
+				 struct joydev_client *client)     //每打开一个设备节点就会生成一个client    attach将client加到链表�?{
 	spin_lock(&joydev->client_lock);
 	list_add_tail_rcu(&client->node, &joydev->client_list); //加client到链表里
 	spin_unlock(&joydev->client_lock);
-	synchronize_rcu();  //？
-}
+	synchronize_rcu();  //�?}
 
 static void joydev_detach_client(struct joydev *joydev,
 				 struct joydev_client *client)  //从链表里删掉client
@@ -213,29 +180,26 @@ static int joydev_open_device(struct joydev *joydev)  //打开设备
 {
 	int retval;
 
-	retval = mutex_lock_interruptible(&joydev->mutex);  //枷锁  信号量
-
+	retval = mutex_lock_interruptible(&joydev->mutex);  //枷锁  信号�?
 	if (retval)
 		return retval;
 
 	if (!joydev->exist)   //
 		retval = -ENODEV;
-	else if (!joydev->open++) {   //open  打开设备节点次数    为0 
+	else if (!joydev->open++) {   //open  打开设备节点次数    �? 
 		retval = input_open_device(&joydev->handle);  //打开设备
 		if (retval)
 			joydev->open--;  //如果没打开  减减
 	}
 
-	mutex_unlock(&joydev->mutex);  //开锁
-	return retval;
+	mutex_unlock(&joydev->mutex);  //开�?	return retval;
 }
 
 static void joydev_close_device(struct joydev *joydev)//与release共同实现关闭设备节点功能
 {
 	mutex_lock(&joydev->mutex);  //枷锁
 
-	if (joydev->exist && !--joydev->open)  //存在   且只有一个应用程序引用
-		input_close_device(&joydev->handle);
+	if (joydev->exist && !--joydev->open)  //存在   且只有一个应用程序引�?		input_close_device(&joydev->handle);
 
 	mutex_unlock(&joydev->mutex);
 }
@@ -243,8 +207,7 @@ static void joydev_close_device(struct joydev *joydev)//与release共同实现�
 static int joydev_release(struct inode *inode, struct file *file)  //关闭设备节点
 {
 	struct joydev_client *client = file->private_data;  //取client地址
-	struct joydev *joydev = client->joydev;  //取client存的joydev事件处理对象结构体
-
+	struct joydev *joydev = client->joydev;  //取client存的joydev事件处理对象结构�?
 	joydev_detach_client(joydev, client);  //从链表删除client
 	kfree(client);//减少引用次数
 
@@ -254,19 +217,16 @@ static int joydev_release(struct inode *inode, struct file *file)  //关闭设�
 	return 0;
 }
 
-static int joydev_open(struct inode *inode, struct file *file)    //  inode 设备号
-{
+static int joydev_open(struct inode *inode, struct file *file)    //  inode 设备�?{
 	struct joydev_client *client;
 	struct joydev *joydev;
 
-	int i = iminor(inode) - JOYDEV_MINOR_BASE;   //iminor  取次设备号  减  基值   i
+	int i = iminor(inode) - JOYDEV_MINOR_BASE;   //iminor  取次设备�? �? 基�?  i
 	int error;
 
-	if (i >= JOYDEV_MINORS)  //次设备号不在处理范围内
-		return -ENODEV;
+	if (i >= JOYDEV_MINORS)  //次设备号不在处理范围�?		return -ENODEV;
 
-	error = mutex_lock_interruptible(&joydev_table_mutex);  //加上锁
-	if (error)
+	error = mutex_lock_interruptible(&joydev_table_mutex);  //加上�?	if (error)
 		return error;
 	joydev = joydev_table[i];//取址
 	if (joydev)
@@ -276,16 +236,13 @@ static int joydev_open(struct inode *inode, struct file *file)    //  inode 设�
 	if (!joydev)
 		return -ENODEV;
 
-	client = kzalloc(sizeof(struct joydev_client), GFP_KERNEL);   //申请一个内存  存client
-	if (!client) {       //不成功    要减掉引用次数
-		error = -ENOMEM;
+	client = kzalloc(sizeof(struct joydev_client), GFP_KERNEL);   //申请一个内�? 存client
+	if (!client) {       //不成�?   要减掉引用次�?		error = -ENOMEM;
 		goto err_put_joydev;
 	}
 
-	spin_lock_init(&client->buffer_lock);  //初始化  缓冲区的那个锁
-	client->joydev = joydev;     //申请成功
-	joydev_attach_client(joydev, client);  //加client到链表
-
+	spin_lock_init(&client->buffer_lock);  //初始�? 缓冲区的那个�?	client->joydev = joydev;     //申请成功
+	joydev_attach_client(joydev, client);  //加client到链�?
 	error = joydev_open_device(joydev);//
 	if (error)
 		goto err_free_client;
@@ -302,12 +259,11 @@ static int joydev_open(struct inode *inode, struct file *file)    //  inode 设�
 }
 
 static int joydev_fetch_next_event(struct joydev_client *client,
-				   struct joy_event *event)   //取事件函数   与read共同实现  被read调用
+				   struct joy_event *event)   //取事件函�?  与read共同实现  被read调用
 {
 	int have_event;
 
-	spin_lock_irq(&client->buffer_lock);  //加锁   读缓冲区数
-
+	spin_lock_irq(&client->buffer_lock);  //加锁   读缓冲区�?
 	have_event = client->head != client->tail;
 	
 	if (have_event) {
@@ -315,10 +271,8 @@ static int joydev_fetch_next_event(struct joydev_client *client,
 		*event = client->buffer[client->tail];
 		
 	}else
-		client->ready = 0; //无事件
-
-	spin_unlock_irq(&client->buffer_lock);    //开锁
-
+		client->ready = 0; //无事�?
+	spin_unlock_irq(&client->buffer_lock);    //开�?
 	return have_event;
 }
 
@@ -331,23 +285,20 @@ static ssize_t joydev_read(struct file *file, char __user *buf,
 	struct joy_event event;
 	int retval;
 
-	if (!joydev->exist)    //joydev不存在 返回
+	if (!joydev->exist)    //joydev不存�?返回
 		return -ENODEV;
 
-	if (count < sizeof(struct joy_event))   //不能完整读一个事件    count是拷贝数据总量
+	if (count < sizeof(struct joy_event))   //不能完整读一个事�?   count是拷贝数据总量
 		return -EINVAL;
 
 	//wait_event_interruptible参数成立   进程睡觉
-	retval = wait_event_interruptible(joydev->wait,!joydev->exist || client->ready);   //没数据 就睡          retval为1  睡觉  否则则不睡
-	if (retval)
+	retval = wait_event_interruptible(joydev->wait,!joydev->exist || client->ready);   //没数�?就睡          retval�?  睡觉  否则则不�?	if (retval)
 		return retval;
 	
 
-	while (retval + sizeof(struct joy_event) <= count &&joydev_fetch_next_event(client, &event))  //判断有无事件    0 + 能读一个完整的事件  <=count（能读事件）并且有事件
-	{    
+	while (retval + sizeof(struct joy_event) <= count &&joydev_fetch_next_event(client, &event))  //判断有无事件    0 + 能读一个完整的事件  <=count（能读事件）并且有事�?	{    
 		
-		if (copy_to_user(buf + retval, &event, sizeof(struct joy_event)))  //把数据从内核空间拷贝到用户空间
-			return -EFAULT;
+		if (copy_to_user(buf + retval, &event, sizeof(struct joy_event)))  //把数据从内核空间拷贝到用户空�?			return -EFAULT;
 
 		retval += sizeof(struct joy_event);      //retval表示已经拷贝的数据量
 	}
@@ -364,8 +315,7 @@ static void joydev_generate_response(struct joydev_client *client,
 }
 
 static ssize_t joydev_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *ppos)//往设备写数据
-{
+				size_t count, loff_t *ppos)//往设备写数�?{
 	struct joydev_client *client = file->private_data;
 	unsigned char c;
 	unsigned int i;
@@ -387,8 +337,7 @@ static ssize_t joydev_write(struct file *file, const char __user *buffer,
 	return count;
 }
 */
-static const struct file_operations joydev_fops = {      //动作操作  结构体    内=外
-	.owner		= THIS_MODULE,
+static const struct file_operations joydev_fops = {      //动作操作  结构�?   �?�?	.owner		= THIS_MODULE,
 	//.write		= joydev_write,
 	.read		= joydev_read,
 	.open		= joydev_open,
@@ -396,7 +345,7 @@ static const struct file_operations joydev_fops = {      //动作操作  结构�
 	.fasync		= joydev_fasync,
 };
 
-static int joydev_install_chrdev(struct joydev *joydev)   //将joydev结构体存到  table数组
+static int joydev_install_chrdev(struct joydev *joydev)   //将joydev结构体存�? table数组
 {
 	joydev_table[joydev->minor] = joydev;
 	return 0;
@@ -411,7 +360,7 @@ static void joydev_remove_chrdev(struct joydev *joydev)   //删除设备节点
 
 
 
-static void joydev_mark_dead(struct joydev *joydev)//exesit置0
+static void joydev_mark_dead(struct joydev *joydev)//exesit�?
 {
 	mutex_lock(&joydev->mutex);
 	joydev->exist = false;
@@ -420,31 +369,28 @@ static void joydev_mark_dead(struct joydev *joydev)//exesit置0
 
 
 
-static void joydev_cleanup(struct joydev *joydev)  //清除之前所有注册信息
-{
+static void joydev_cleanup(struct joydev *joydev)  //清除之前所有注册信�?{
 	struct input_handle *handle = &joydev->handle;
 
-	joydev_mark_dead(joydev);//exesit置0
+	joydev_mark_dead(joydev);//exesit�?
 
 	joydev_remove_chrdev(joydev);//删除设备节点
 
-	if (joydev->open)  //打开过
-		input_close_device(handle);//关闭
+	if (joydev->open)  //打开�?		input_close_device(handle);//关闭
 }
 
 
 
 
 static int joydev_connect(struct input_handler *handler, struct input_dev *dev,
-			  const struct input_device_id *id)          //链接hanlder（joydev）   与  divice（js）  
+			  const struct input_device_id *id)          //链接hanlder（joydev�?  �? divice（js�? 
 {
 	struct joydev *joydev;
 	int minor;
 	int error;
-//将joydev地址放到为空的table数组，再申请一个空内存   放joydev结构体
-	
-	for (minor = 0; minor < JOYDEV_MINORS; minor++)   //遍历table数组              在table里找到一个空位 存放joydev
-		if (!joydev_table[minor])  //不为空  跳出
+//将joydev地址放到为空的table数组，再申请一个空内存   放joydev结构�?	
+	for (minor = 0; minor < JOYDEV_MINORS; minor++)   //遍历table数组              在table里找到一个空�?存放joydev
+		if (!joydev_table[minor])  //不为�? 跳出
 			break;
 	if (minor == JOYDEV_MINORS) {   //为空
 		printk(KERN_ERR "joydev: no more free joydev devices\n");
@@ -479,7 +425,7 @@ static int joydev_connect(struct input_handler *handler, struct input_dev *dev,
 	if (error)   //失败
 		goto err_free_joydev;
 
-	error = joydev_install_chrdev(joydev);//将joydev结构体存到  table数组
+	error = joydev_install_chrdev(joydev);//将joydev结构体存�? table数组
 	if (error)  //没存进去
 		goto err_unregister_handle;  
 
@@ -509,7 +455,7 @@ static void joydev_disconnect(struct input_handle *handle)
 }
 
 
-//intput_device（js.c）   input_handler(joydev.c)    两个结构体对应     按键匹配
+//intput_device（js.c�?  input_handler(joydev.c)    两个结构体对�?    按键匹配
 static const struct input_device_id joydev_ids[] = {    //
 	{
 		.flags = INPUT_DEVICE_ID_MATCH_EVBIT |      
@@ -534,7 +480,7 @@ static struct input_handler joydev_handler = {
 	.id_table	= joydev_ids,
 };
 
-static int __init joydev_init(void)   //初始化函数    注册joydev信息
+static int __init joydev_init(void)   //初始化函�?   注册joydev信息
 {
 	printk("init for handler\n");
 	return input_register_handler(&joydev_handler);
@@ -545,5 +491,4 @@ static void __exit joydev_exit(void)   //退出时   删除信息
 	input_unregister_handler(&joydev_handler);
 }
 
-module_init(joydev_init);//指定初始化函数
-module_exit(joydev_exit);//
+module_init(joydev_init);//指定初始化函�?module_exit(joydev_exit);//
